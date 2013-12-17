@@ -42,8 +42,6 @@ public class TileBitmapDrawable extends Drawable {
 
 	// Instance ids are used to identify a cache hit for a specific instance of TileBitmapDrawable on the shared cache
 	private final int mInstanceId = System.identityHashCode(this);
-	// private static final AtomicInteger sInstanceIds = new AtomicInteger(1);
-	// private final int mInstanceId = sInstanceIds.getAndIncrement();
 
 	// We need the reference of the parent ImageView in order to get the Matrix values and determine the visible area
 	private final WeakReference<ImageView> mParentView;
@@ -97,12 +95,12 @@ public class TileBitmapDrawable extends Drawable {
 
 		synchronized(sBitmapCacheLock) {
 			if(sBitmapCache == null) {
-				
+
 				// We calculate the maxHorizontalTiles and maxVerticalTiles to be twice the size of the screen
 				// The Tile can be reduced up to half of its size until the next level of tiles is displayed
 				final int maxHorizontalTiles = (int) Math.ceil(2 * 2 * metrics.widthPixels / (float) mTileSize);
 				final int maxVerticalTiles = (int) Math.ceil(2 * 2 * metrics.heightPixels / (float) mTileSize);
-				
+
 				// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
 				final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
 				sBitmapCache = new BitmapLruCache(cacheSize);
@@ -175,12 +173,13 @@ public class TileBitmapDrawable extends Drawable {
 
 		// The scale required to display the whole Bitmap inside the ImageView. It will be the minimum allowed scale value
 		final float minScale = Math.min(parentViewWidth / (float) mIntrinsicWidth, parentViewHeight / (float) mIntrinsicHeight);
-		
+
 		// The number of allowed levels for this Bitmap. Each subsequent level is half size of the previous one
 		final int levelCount = Math.max(1, MathUtils.ceilLog2(mIntrinsicWidth / (mIntrinsicWidth * minScale)));
+		
 		final int currentLevel = MathUtils.clamp(MathUtils.floorLog2(1 / scale), 0, levelCount - 1);
 		final int sampleSize = 1 << currentLevel;
-		
+
 		final int currentTileSize = mTileSize * sampleSize;
 		final int horizontalTiles = (int) Math.ceil(mIntrinsicWidth / (float) currentTileSize);
 		final int verticalTiles = (int) Math.ceil(mIntrinsicHeight / (float) currentTileSize);
@@ -227,28 +226,15 @@ public class TileBitmapDrawable extends Drawable {
 								mDecodeQueue.add(tile);
 							}
 						}
-						
-						// Here, we try to get the closest cached Bitmap to be drawn while we decode the proper one
-						for(int k = currentLevel + 1; k < levelCount; k++) {
-							synchronized(sBitmapCacheLock) {
-								cached = sBitmapCache.get(Tile.getKey(mInstanceId, i, j, k));
-							}
-							if(cached != null) {
-								canvas.drawBitmap(cached, null, mDestRect, mPaint);
-								break;
-							}
-						}
 
-						// Our last resort is to use the screenNail 
-						if(cached == null) {
-							final int screenNailLeft = Math.round(tileLeft * mScreenNail.getWidth() / (float) mIntrinsicWidth);
-							final int screenNailTop = Math.round(tileTop * mScreenNail.getHeight() / (float) mIntrinsicHeight);
-							final int screenNailRight = Math.round(tileRight * mScreenNail.getWidth() / (float) mIntrinsicWidth);
-							final int screenNailBottom = Math.round(tileBottom * mScreenNail.getHeight() / (float) mIntrinsicHeight);
-							mTileRect.set(screenNailLeft, screenNailTop, screenNailRight, screenNailBottom);
+						// We use the screenNail while we decode the proper tile
+						final int screenNailLeft = Math.round(tileLeft * mScreenNail.getWidth() / (float) mIntrinsicWidth);
+						final int screenNailTop = Math.round(tileTop * mScreenNail.getHeight() / (float) mIntrinsicHeight);
+						final int screenNailRight = Math.round(tileRight * mScreenNail.getWidth() / (float) mIntrinsicWidth);
+						final int screenNailBottom = Math.round(tileBottom * mScreenNail.getHeight() / (float) mIntrinsicHeight);
+						mTileRect.set(screenNailLeft, screenNailTop, screenNailRight, screenNailBottom);
 
-							canvas.drawBitmap(mScreenNail, mTileRect, mDestRect, mPaint);
-						}
+						canvas.drawBitmap(mScreenNail, mTileRect, mDestRect, mPaint);
 					}
 				}
 			}
@@ -290,10 +276,6 @@ public class TileBitmapDrawable extends Drawable {
 
 		public String getKey() {
 			return "#" + mInstanceId + "#" + mHorizontalPos + "#" + mVerticalPos + "#" + mLevel;
-		}
-		
-		public static String getKey(int instanceId, int horizontalPos, int verticalPos, int level) {
-			return "#" + instanceId + "#" + horizontalPos + "#" + verticalPos + "#" + level;
 		}
 
 		@Override
@@ -447,6 +429,7 @@ public class TileBitmapDrawable extends Drawable {
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
 				}
+				
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
