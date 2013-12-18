@@ -6,6 +6,7 @@ import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -41,7 +42,8 @@ public class TileBitmapDrawable extends Drawable {
 	private static final Object sBitmapCacheLock = new Object();
 
 	// Instance ids are used to identify a cache hit for a specific instance of TileBitmapDrawable on the shared cache
-	private final int mInstanceId = System.identityHashCode(this);
+	private static final AtomicInteger sInstanceIds = new AtomicInteger(1);
+	private final int mInstanceId = sInstanceIds.getAndIncrement();
 
 	// We need the reference of the parent ImageView in order to get the Matrix values and determine the visible area
 	private final WeakReference<ImageView> mParentView;
@@ -96,11 +98,12 @@ public class TileBitmapDrawable extends Drawable {
 		synchronized(sBitmapCacheLock) {
 			if(sBitmapCache == null) {
 
-				// We calculate the maxHorizontalTiles and maxVerticalTiles to be twice the size of the screen
 				// The Tile can be reduced up to half of its size until the next level of tiles is displayed
-				final int maxHorizontalTiles = (int) Math.ceil(2 * 2 * metrics.widthPixels / (float) mTileSize);
-				final int maxVerticalTiles = (int) Math.ceil(2 * 2 * metrics.heightPixels / (float) mTileSize);
+				// It can also be displayed just a portion of the tile on each size, so we need to add 1
+				final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize) + 1;
+				final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize) + 1;
 
+				// We want the cache to hold the minimum required size to display all visible tiles
 				// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
 				final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
 				sBitmapCache = new BitmapLruCache(cacheSize);
@@ -176,7 +179,7 @@ public class TileBitmapDrawable extends Drawable {
 
 		// The number of allowed levels for this Bitmap. Each subsequent level is half size of the previous one
 		final int levelCount = Math.max(1, MathUtils.ceilLog2(mIntrinsicWidth / (mIntrinsicWidth * minScale)));
-		
+
 		final int currentLevel = MathUtils.clamp(MathUtils.floorLog2(1 / scale), 0, levelCount - 1);
 		final int sampleSize = 1 << currentLevel;
 
@@ -429,7 +432,7 @@ public class TileBitmapDrawable extends Drawable {
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
 				}
-				
+
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
