@@ -3,6 +3,7 @@ package com.diegocarloslima.byakugallery.lib;
 import android.content.Context;
 import android.graphics.Matrix;
 import android.graphics.drawable.Drawable;
+import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -21,16 +22,19 @@ public class TouchImageView extends ImageView {
 	private int mDrawableIntrinsicHeight;
 
 	private final TouchGestureDetector mTouchGestureDetector;
+
 	private final Matrix mMatrix = new Matrix();
 	private final float[] mMatrixValues = new float[9];
-	
+
 	private float mScale;
 	private float mTranslationX;
 	private float mTranslationY;
+
 	private Float mLastFocusX;
 	private Float mLastFocusY;
+
 	private final FlingScroller mFlingScroller = new FlingScroller();
-	private boolean mRepositioningAnimation;
+	private boolean mIsAnimatingBack;
 
 	public TouchImageView(Context context) {
 		this(context, null);
@@ -42,7 +46,7 @@ public class TouchImageView extends ImageView {
 
 	public TouchImageView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
-		
+
 		final TouchGestureDetector.OnTouchGestureListener listener = new TouchGestureDetector.OnTouchGestureListener() {
 
 			@Override
@@ -60,11 +64,14 @@ public class TouchImageView extends ImageView {
 				loadMatrixValues();
 
 				final float minScale = getMinScale();
+				// If we have already zoomed in, we should return to our initial scale value (minScale). Otherwise, scale to full size
 				final float targetScale = mScale > minScale ? minScale : 1;
 
+				// First, we try to keep the focused point in the same position when the animation ends
 				final float desiredTranslationX = e.getX() - (e.getX() - mTranslationX) * (targetScale / mScale);
 				final float desiredTranslationY = e.getY() - (e.getY() - mTranslationY) * (targetScale / mScale);
 
+				// Here, we apply a correction to avoid unwanted blank spaces
 				final float targetTranslationX = desiredTranslationX + computeTranslation(getMeasuredWidth(), mDrawableIntrinsicWidth * targetScale, desiredTranslationX, 0);
 				final float targetTranslationY = desiredTranslationY + computeTranslation(getMeasuredHeight(), mDrawableIntrinsicHeight * targetScale, desiredTranslationY, 0);
 
@@ -78,7 +85,8 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-				if(mRepositioningAnimation) {
+				// Sometimes, this method is called just after an onScaleEnd event. In this case, we want to wait until we animate back our image
+				if(mIsAnimatingBack) {
 					return false;
 				}
 				loadMatrixValues();
@@ -95,14 +103,15 @@ public class TouchImageView extends ImageView {
 				mMatrix.postTranslate(dx, dy);
 
 				clearAnimation();
-				invalidate();
+				ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
 
 				return true;
 			}
 
 			@Override
 			public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-				if(mRepositioningAnimation) {
+				// Sometimes, this method is called just after an onScaleEnd event. In this case, we want to wait until we animate back our image
+				if(mIsAnimatingBack) {
 					return false;
 				}
 				loadMatrixValues();
@@ -115,6 +124,7 @@ public class TouchImageView extends ImageView {
 				final float minY = verticalFreeSpace > 0 ? verticalFreeSpace : getMeasuredHeight() - mDrawableIntrinsicHeight * mScale;
 				final float maxY = verticalFreeSpace > 0 ? verticalFreeSpace : 0;
 
+				// Using AOSP FlingScroller here. The results were better than the Scroller class 
 				mFlingScroller.fling(Math.round(mTranslationX), Math.round(mTranslationY), Math.round(velocityX), Math.round(velocityY), Math.round(minX), Math.round(maxX), Math.round(minY), Math.round(maxY));
 
 				final float dx = mFlingScroller.getFinalX() - mTranslationX;
@@ -143,27 +153,13 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScale(ScaleGestureDetector detector) {
-
-				final float scaleFactor = detector.getScaleFactor();
-				float focusX = detector.getFocusX();
-				float focusY = detector.getFocusY();
-
 				loadMatrixValues();
 
 				final float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
 				final float currentDrawableHeight = mDrawableIntrinsicHeight * mScale;
 
-				if(mTranslationX > 0 && focusX < mTranslationX) {
-					focusX = mTranslationX;
-				} else if(currentDrawableWidth + mTranslationX < getMeasuredWidth() && focusX > currentDrawableWidth + mTranslationX) {
-					focusX = currentDrawableWidth + mTranslationX;
-				}
-
-				if(mTranslationY > 0 && focusY < mTranslationY) {
-					focusY = mTranslationY;
-				} else if(currentDrawableHeight + mTranslationY < getMeasuredHeight() && focusY > currentDrawableHeight + mTranslationY) {
-					focusY = currentDrawableHeight + mTranslationY;
-				}
+				final float focusX = computeFocus(getMeasuredWidth(), currentDrawableWidth, mTranslationX, detector.getFocusX());
+				final float focusY = computeFocus(getMeasuredHeight(), currentDrawableHeight, mTranslationY, detector.getFocusY());
 
 				if(mLastFocusX != null && mLastFocusY != null) {
 					final float dx = focusX - mLastFocusX;
@@ -171,11 +167,11 @@ public class TouchImageView extends ImageView {
 					mMatrix.postTranslate(dx, dy);
 				}
 
-				final float scale = computeScale(getMinScale(), mScale, scaleFactor);
+				final float scale = computeScale(getMinScale(), mScale, detector.getScaleFactor());
 				mMatrix.postScale(scale, scale, focusX, focusY);
 
 				clearAnimation();
-				invalidate();
+				ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
 
 				mLastFocusX = focusX;
 				mLastFocusY = focusY;
@@ -205,7 +201,7 @@ public class TouchImageView extends ImageView {
 				animation.setDuration(SCALE_END_ANIMATION_DURATION);
 				startAnimation(animation);
 
-				mRepositioningAnimation = true;
+				mIsAnimatingBack = true;
 			}
 		};
 
@@ -225,11 +221,11 @@ public class TouchImageView extends ImageView {
 			resetToInitialState();
 		}
 	}
-	
+
 	@Override
 	public void setImageMatrix(Matrix matrix) {
 	}
-	
+
 	@Override
 	public Matrix getImageMatrix() {
 		return mMatrix;
@@ -245,7 +241,7 @@ public class TouchImageView extends ImageView {
 	@Override
 	public void clearAnimation() {
 		super.clearAnimation();
-		mRepositioningAnimation = false;
+		mIsAnimatingBack = false;
 	}
 
 	@Override
@@ -292,6 +288,9 @@ public class TouchImageView extends ImageView {
 		final float minScale = getMinScale();
 		mMatrix.postScale(minScale, minScale);
 
+		final float[] values = new float[9];
+		mMatrix.getValues(values);
+
 		final float freeSpaceHorizontal = (getMeasuredWidth() - (mDrawableIntrinsicWidth * minScale)) / 2;
 		final float freeSpaceVertical = (getMeasuredHeight() - (mDrawableIntrinsicHeight * minScale)) / 2;
 		mMatrix.postTranslate(freeSpaceHorizontal, freeSpaceVertical);
@@ -328,6 +327,17 @@ public class TouchImageView extends ImageView {
 		return delta;
 	}
 
+	// If our focal point is outside the image, we will project it to our image bounds
+	private static float computeFocus(float viewSize, float drawableSize, float currentTranslation, float focusCoordinate) {
+		if(currentTranslation > 0 && focusCoordinate < currentTranslation) {
+			return currentTranslation;
+		} else if(drawableSize + currentTranslation < viewSize && focusCoordinate > drawableSize + currentTranslation) {
+			return drawableSize + currentTranslation;
+		}
+
+		return focusCoordinate;
+	}
+
 	private static float computeScale(float minScale, float currentScale, float delta) {
 		if(currentScale * delta < minScale) {
 			return minScale / currentScale;
@@ -350,7 +360,7 @@ public class TouchImageView extends ImageView {
 			final float dy = mFlingScroller.getCurrY() - mTranslationY;
 			mMatrix.postTranslate(dx, dy);
 
-			invalidate();
+			ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
 		}
 	}
 
@@ -366,7 +376,7 @@ public class TouchImageView extends ImageView {
 
 		TouchAnimation(float targetScale, float targetTranslationX, float targetTranslationY) {
 			loadMatrixValues();
-			
+
 			this.initialScale =  mScale;
 			this.initialTranslationX = mTranslationX;
 			this.initialTranslationY = mTranslationY;
@@ -380,22 +390,27 @@ public class TouchImageView extends ImageView {
 		protected void applyTransformation(float interpolatedTime, Transformation t) {
 			loadMatrixValues();
 
-			if(interpolatedTime > 1) {
-				interpolatedTime = 1;
+			if(interpolatedTime >= 1) {
+				mMatrix.getValues(mMatrixValues);
+				mMatrixValues[Matrix.MSCALE_X] = this.targetScale;
+				mMatrixValues[Matrix.MSCALE_Y] = this.targetScale;
+				mMatrixValues[Matrix.MTRANS_X] = this.targetTranslationX;
+				mMatrixValues[Matrix.MTRANS_Y] = this.targetTranslationY;
+				mMatrix.setValues(mMatrixValues);
+			} else {
+				final float scaleFactor = (this.initialScale + interpolatedTime * (this.targetScale - this.initialScale)) / mScale;
+				mMatrix.postScale(scaleFactor, scaleFactor);
+
+				mMatrix.getValues(mMatrixValues);
+				final float currentTranslationX = mMatrixValues[Matrix.MTRANS_X];
+				final float currentTranslationY = mMatrixValues[Matrix.MTRANS_Y];
+
+				final float dx = this.initialTranslationX + interpolatedTime * (this.targetTranslationX - this.initialTranslationX) - currentTranslationX;
+				final float dy = this.initialTranslationY + interpolatedTime * (this.targetTranslationY - this.initialTranslationY) - currentTranslationY;
+				mMatrix.postTranslate(dx, dy);
 			}
 
-			final float scaleFactor = (this.initialScale + interpolatedTime * (this.targetScale - this.initialScale)) / mScale;
-			mMatrix.postScale(scaleFactor, scaleFactor);
-
-			mMatrix.getValues(mMatrixValues);
-			final float currentTranslationX = mMatrixValues[Matrix.MTRANS_X];
-			final float currentTranslationY = mMatrixValues[Matrix.MTRANS_Y];
-
-			final float dx = this.initialTranslationX + interpolatedTime * (this.targetTranslationX - this.initialTranslationX) - currentTranslationX;
-			final float dy = this.initialTranslationY + interpolatedTime * (this.targetTranslationY - this.initialTranslationY) - currentTranslationY;
-			mMatrix.postTranslate(dx, dy);
-
-			invalidate();
+			ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
 		}
 	}
 }

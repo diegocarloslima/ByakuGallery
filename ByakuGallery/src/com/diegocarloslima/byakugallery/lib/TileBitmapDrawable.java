@@ -157,6 +157,7 @@ public class TileBitmapDrawable extends Drawable {
 		return mIntrinsicHeight;
 	}
 
+	@Override
 	public void draw(Canvas canvas) {
 		final ImageView parentView = mParentView.get();
 		if(parentView == null) {
