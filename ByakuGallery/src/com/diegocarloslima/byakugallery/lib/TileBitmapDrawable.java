@@ -27,6 +27,7 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.support.v4.util.LruCache;
 import android.util.DisplayMetrics;
+import android.view.Display;
 import android.view.WindowManager;
 import android.widget.ImageView;
 
@@ -42,9 +43,9 @@ public class TileBitmapDrawable extends Drawable {
 	// Shared cache between instances to minimize OutOfMemoryError
 	private static BitmapLruCache sBitmapCache;
 	private static final Object sBitmapCacheLock = new Object();
-	
+
 	// We keep the removed entries of BitmapLruCache in order to reuse then and minimize Object allocations
-	private static final HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>> sReusableBitmapMap = new HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>>();
+	private static final HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>> sReusableBitmapPool = new HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>>();
 
 	// Instance ids are used to identify a cache hit for a specific instance of TileBitmapDrawable on the shared BitmapLruCache
 	private static final AtomicInteger sInstanceIds = new AtomicInteger(1);
@@ -93,24 +94,23 @@ public class TileBitmapDrawable extends Drawable {
 		}
 
 		final DisplayMetrics metrics = new DisplayMetrics();
-		final WindowManager wm = (WindowManager) parentView.getContext().getSystemService(Context.WINDOW_SERVICE);
-		wm.getDefaultDisplay().getMetrics(metrics);
-
+		getDisplayMetrics(parentView.getContext(), metrics);
+		
 		mTileSize = metrics.densityDpi >= DisplayMetrics.DENSITY_HIGH ? TILE_SIZE_DENSITY_HIGH : TILE_SIZE_DEFAULT;
 
 		mScreenNail = screenNail;
 
+		// The Tile can be reduced up to half of its size until the next level of tiles is displayed
+		// It can also be displayed just a portion of the tile on each size, so we need to add 1
+		final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize) + 1;
+		final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize) + 1;
+
+		// We want the cache to hold the minimum required size to display all visible tiles
+		// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
+		final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
+		
 		synchronized(sBitmapCacheLock) {
 			if(sBitmapCache == null) {
-
-				// The Tile can be reduced up to half of its size until the next level of tiles is displayed
-				// It can also be displayed just a portion of the tile on each size, so we need to add 1
-				final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize) + 1;
-				final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize) + 1;
-
-				// We want the cache to hold the minimum required size to display all visible tiles
-				// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
-				final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
 				sBitmapCache = new BitmapLruCache(cacheSize);
 			}
 		}
@@ -260,7 +260,26 @@ public class TileBitmapDrawable extends Drawable {
 		mDecoderWorker.quit();
 	}
 
-	private static String getReusableMapKey(int width, int height) {
+	@TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
+	private static void getDisplayMetrics(Context context, DisplayMetrics outMetrics) {
+		final WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+		final Display display = wm.getDefaultDisplay();
+
+		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+			display.getRealMetrics(outMetrics);
+			return;
+		} else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+			try {
+				display.getMetrics(outMetrics);
+				outMetrics.widthPixels = (Integer) Display.class.getMethod("getRawWidth").invoke(display);
+				outMetrics.heightPixels = (Integer) Display.class.getMethod("getRawHeight").invoke(display);
+				return;
+			} catch (Exception e) {}
+		}
+		display.getMetrics(outMetrics);
+	}
+	
+	private static String getReusableBitmapPoolKey(int width, int height) {
 		return "#" + width + "#" + height;
 	}
 
@@ -270,12 +289,12 @@ public class TileBitmapDrawable extends Drawable {
 			final float sampleSize = 1 << tile.mLevel;
 			final int bitmapWidth = Math.round(tile.mTileRect.width() / sampleSize);
 			final int bitmapHeight = Math.round(tile.mTileRect.height() / sampleSize);
-			final String reusableMapKey = getReusableMapKey(bitmapWidth, bitmapHeight);
+			final String reusableMapKey = getReusableBitmapPoolKey(bitmapWidth, bitmapHeight);
 
 			Bitmap bitmap = null;
 
-			synchronized(sReusableBitmapMap) {
-				final LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapMap.get(reusableMapKey);
+			synchronized(sReusableBitmapPool) {
+				final LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableMapKey);
 				if(queue != null) {
 					SoftReference<Bitmap> ref = queue.poll();
 					while(ref != null) {
@@ -352,12 +371,12 @@ public class TileBitmapDrawable extends Drawable {
 
 		@Override
 		protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
-			final String reusableMapKey = getReusableMapKey(oldValue.getWidth(), oldValue.getHeight());
-			synchronized(sReusableBitmapMap) {
-				LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapMap.get(reusableMapKey);
+			final String reusableMapKey = getReusableBitmapPoolKey(oldValue.getWidth(), oldValue.getHeight());
+			synchronized(sReusableBitmapPool) {
+				LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableMapKey);
 				if(queue == null) {
 					queue = new LinkedBlockingQueue<SoftReference<Bitmap>>();
-					sReusableBitmapMap.put(reusableMapKey, queue);
+					sReusableBitmapPool.put(reusableMapKey, queue);
 				}
 				queue.add(new SoftReference<Bitmap>(oldValue));
 			}
