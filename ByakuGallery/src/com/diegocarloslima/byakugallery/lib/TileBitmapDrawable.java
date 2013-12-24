@@ -40,11 +40,11 @@ public class TileBitmapDrawable extends Drawable {
 	private static final int TILE_SIZE_DENSITY_HIGH = 256;
 	private static final int TILE_SIZE_DEFAULT = 128;
 
-	// Shared cache between instances to minimize OutOfMemoryError
+	// We use a shared cache between instances to minimize OutOfMemoryError
 	private static BitmapLruCache sBitmapCache;
 	private static final Object sBitmapCacheLock = new Object();
 
-	// We keep the removed entries of BitmapLruCache in order to reuse then and minimize Object allocations
+	// We keep the removed entries of BitmapLruCache in a Bitmap pool in order to reuse them and minimize Object allocations
 	private static final HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>> sReusableBitmapPool = new HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>>();
 
 	// Instance ids are used to identify a cache hit for a specific instance of TileBitmapDrawable on the shared BitmapLruCache
@@ -186,6 +186,7 @@ public class TileBitmapDrawable extends Drawable {
 		// The number of allowed levels for this Bitmap. Each subsequent level is half size of the previous one
 		final int levelCount = Math.max(1, MathUtils.ceilLog2(mIntrinsicWidth / (mIntrinsicWidth * minScale)));
 
+		// sampleSize = 2 ^ currentLevel
 		final int currentLevel = MathUtils.clamp(MathUtils.floorLog2(1 / scale), 0, levelCount - 1);
 		final int sampleSize = 1 << currentLevel;
 
@@ -206,8 +207,8 @@ public class TileBitmapDrawable extends Drawable {
 
 				final int tileLeft = i * currentTileSize;
 				final int tileTop = j * currentTileSize;
-				final int tileRight = (i + 1) * currentTileSize > mIntrinsicWidth ? mIntrinsicWidth : (i + 1) * currentTileSize;
-				final int tileBottom = (j + 1) * currentTileSize > mIntrinsicHeight ? mIntrinsicHeight : (j + 1) * currentTileSize;
+				final int tileRight = (i + 1) * currentTileSize <= mIntrinsicWidth ? (i + 1) * currentTileSize : mIntrinsicWidth;
+				final int tileBottom = (j + 1) * currentTileSize <= mIntrinsicHeight ? (j + 1) * currentTileSize : mIntrinsicHeight;
 				mTileRect.set(tileLeft, tileTop, tileRight, tileBottom);
 
 				if(Rect.intersects(mVisibleAreaRect, mTileRect)) {
@@ -282,36 +283,44 @@ public class TileBitmapDrawable extends Drawable {
 	private static String getReusableBitmapPoolKey(int width, int height) {
 		return "#" + width + "#" + height;
 	}
+	
+	private static void addReusableBitmap(Bitmap bitmap) {
+		final String reusableBitmapPoolKey = getReusableBitmapPoolKey(bitmap.getWidth(), bitmap.getHeight());
+		
+		synchronized(sReusableBitmapPool) {
+			LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableBitmapPoolKey);
+			if(queue == null) {
+				queue = new LinkedBlockingQueue<SoftReference<Bitmap>>();
+				sReusableBitmapPool.put(reusableBitmapPoolKey, queue);
+			}
+			queue.add(new SoftReference<Bitmap>(bitmap));
+		}
+	}
+	
+	private static Bitmap getReusableBitmap(int bitmapWidth, int bitmapHeight) {
+		final String reusableBitmapPoolKey = getReusableBitmapPoolKey(bitmapWidth, bitmapHeight);
+		
+		Bitmap bitmap = null;
 
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	private static void addInBitmapOptions(Tile tile, BitmapFactory.Options options) {
-		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-			final float sampleSize = 1 << tile.mLevel;
-			final int bitmapWidth = Math.round(tile.mTileRect.width() / sampleSize);
-			final int bitmapHeight = Math.round(tile.mTileRect.height() / sampleSize);
-			final String reusableMapKey = getReusableBitmapPoolKey(bitmapWidth, bitmapHeight);
-
-			Bitmap bitmap = null;
-
-			synchronized(sReusableBitmapPool) {
-				final LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableMapKey);
-				if(queue != null) {
-					SoftReference<Bitmap> ref = queue.poll();
-					while(ref != null) {
-						bitmap = ref.get();
-						if(bitmap != null) {
-							break;
-						}
-						ref = queue.poll();
+		synchronized(sReusableBitmapPool) {
+			final LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableBitmapPoolKey);
+			if(queue != null) {
+				SoftReference<Bitmap> ref = queue.poll();
+				while(ref != null) {
+					bitmap = ref.get();
+					if(bitmap != null) {
+						break;
 					}
+					ref = queue.poll();
 				}
 			}
-
-			if(bitmap == null) {
-				bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Config.ARGB_8888);
-			}
-			options.inBitmap = bitmap;
 		}
+
+		if(bitmap == null) {
+			bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Config.ARGB_8888);
+		}
+		
+		return bitmap;
 	}
 
 	public interface OnInitializeListener {
@@ -364,33 +373,21 @@ public class TileBitmapDrawable extends Drawable {
 			super(maxSize);
 		}
 
+		@TargetApi(Build.VERSION_CODES.KITKAT)
 		@Override
 		protected int sizeOf(String key, Bitmap value) {
-			return getBitmapSize(value);
+			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+				return value.getAllocationByteCount();
+			}
+			else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR1) {
+				return value.getByteCount();
+			}
+			return value.getRowBytes() * value.getHeight();
 		}
 
 		@Override
 		protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
-			final String reusableMapKey = getReusableBitmapPoolKey(oldValue.getWidth(), oldValue.getHeight());
-			synchronized(sReusableBitmapPool) {
-				LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableMapKey);
-				if(queue == null) {
-					queue = new LinkedBlockingQueue<SoftReference<Bitmap>>();
-					sReusableBitmapPool.put(reusableMapKey, queue);
-				}
-				queue.add(new SoftReference<Bitmap>(oldValue));
-			}
-		}
-
-		@TargetApi(Build.VERSION_CODES.KITKAT)
-		private static int getBitmapSize(Bitmap bitmap) {
-			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-				return bitmap.getAllocationByteCount();
-			}
-			else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR1) {
-				return bitmap.getByteCount();
-			}
-			return bitmap.getRowBytes() * bitmap.getHeight();
+			addReusableBitmap(oldValue);
 		}
 	}
 
@@ -473,6 +470,7 @@ public class TileBitmapDrawable extends Drawable {
 			mDecodeQueue = decodeQueue;
 		}
 
+		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 		@Override
 		public void run() {
 			while(true) {
@@ -500,8 +498,14 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferredConfig = Config.ARGB_8888;
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
-				addInBitmapOptions(tile, options);
-
+				
+				if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+					final int bitmapWidth = Math.round(tile.mTileRect.width() / (float) options.inSampleSize);
+					final int bitmapHeight = Math.round(tile.mTileRect.height() / (float) options.inSampleSize);
+					
+					options.inBitmap = getReusableBitmap(bitmapWidth, bitmapHeight);
+				}
+				
 				Bitmap bitmap;
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
@@ -510,9 +514,14 @@ public class TileBitmapDrawable extends Drawable {
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
+				
+				if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB && options.inBitmap != null && options.inBitmap != bitmap) {
+					addReusableBitmap(options.inBitmap);
+					options.inBitmap = null;
+				}
 			}
 		}
-
+		
 		public void quit() {
 			mQuit = true;
 			interrupt();
