@@ -95,7 +95,7 @@ public class TileBitmapDrawable extends Drawable {
 
 		final DisplayMetrics metrics = new DisplayMetrics();
 		getDisplayMetrics(parentView.getContext(), metrics);
-		
+
 		mTileSize = metrics.densityDpi >= DisplayMetrics.DENSITY_HIGH ? TILE_SIZE_DENSITY_HIGH : TILE_SIZE_DEFAULT;
 
 		mScreenNail = screenNail;
@@ -108,7 +108,7 @@ public class TileBitmapDrawable extends Drawable {
 		// We want the cache to hold the minimum required size to display all visible tiles
 		// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
 		final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
-		
+
 		synchronized(sBitmapCacheLock) {
 			if(sBitmapCache == null) {
 				sBitmapCache = new BitmapLruCache(cacheSize);
@@ -267,18 +267,18 @@ public class TileBitmapDrawable extends Drawable {
 
 		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
 			display.getRealMetrics(outMetrics);
-			return;
-		} else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			try {
-				display.getMetrics(outMetrics);
-				outMetrics.widthPixels = (Integer) Display.class.getMethod("getRawWidth").invoke(display);
-				outMetrics.heightPixels = (Integer) Display.class.getMethod("getRawHeight").invoke(display);
-				return;
-			} catch (Exception e) {}
+		} else {
+			display.getMetrics(outMetrics);
+			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+				try {
+					outMetrics.widthPixels = (Integer) Display.class.getMethod("getRawWidth").invoke(display);
+					outMetrics.heightPixels = (Integer) Display.class.getMethod("getRawHeight").invoke(display);
+					return;
+				} catch (Exception e) {}
+			}
 		}
-		display.getMetrics(outMetrics);
 	}
-	
+
 	private static String getReusableBitmapPoolKey(int width, int height) {
 		return "#" + width + "#" + height;
 	}
