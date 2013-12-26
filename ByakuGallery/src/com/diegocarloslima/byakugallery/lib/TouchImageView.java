@@ -89,6 +89,7 @@ public class TouchImageView extends ImageView {
 				if(mIsAnimatingBack) {
 					return false;
 				}
+
 				loadMatrixValues();
 
 				final float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
@@ -96,10 +97,6 @@ public class TouchImageView extends ImageView {
 
 				final float dx = computeTranslation(getMeasuredWidth(), currentDrawableWidth, mTranslationX, -distanceX);
 				final float dy = computeTranslation(getMeasuredHeight(), currentDrawableHeight, mTranslationY, -distanceY);
-
-				if(Math.abs(dx) < 1 && Math.abs(dy) < 1) {
-					return false;
-				}
 				mMatrix.postTranslate(dx, dy);
 
 				clearAnimation();
@@ -114,25 +111,20 @@ public class TouchImageView extends ImageView {
 				if(mIsAnimatingBack) {
 					return false;
 				}
+
 				loadMatrixValues();
 
-				final float horizontalFreeSpace = (getMeasuredWidth() - mDrawableIntrinsicWidth * mScale) / 2F;
-				final float minX = horizontalFreeSpace > 0 ? horizontalFreeSpace : getMeasuredWidth() - mDrawableIntrinsicWidth * mScale;
-				final float maxX = horizontalFreeSpace > 0 ? horizontalFreeSpace : 0;
+				final float horizontalSideFreeSpace = (getMeasuredWidth() - mDrawableIntrinsicWidth * mScale) / 2F;
+				final float minTranslationX = horizontalSideFreeSpace > 0 ? horizontalSideFreeSpace : getMeasuredWidth() - mDrawableIntrinsicWidth * mScale;
+				final float maxTranslationX = horizontalSideFreeSpace > 0 ? horizontalSideFreeSpace : 0;
 
-				final float verticalFreeSpace = (getMeasuredHeight() - mDrawableIntrinsicHeight * mScale) / 2F;
-				final float minY = verticalFreeSpace > 0 ? verticalFreeSpace : getMeasuredHeight() - mDrawableIntrinsicHeight * mScale;
-				final float maxY = verticalFreeSpace > 0 ? verticalFreeSpace : 0;
+				final float verticalSideFreeSpace = (getMeasuredHeight() - mDrawableIntrinsicHeight * mScale) / 2F;
+				final float minTranslationY = verticalSideFreeSpace > 0 ? verticalSideFreeSpace : getMeasuredHeight() - mDrawableIntrinsicHeight * mScale;
+				final float maxTranslationY = verticalSideFreeSpace > 0 ? verticalSideFreeSpace : 0;
 
-				// Using AOSP FlingScroller here. The results were better than the Scroller class 
-				mFlingScroller.fling(Math.round(mTranslationX), Math.round(mTranslationY), Math.round(velocityX), Math.round(velocityY), Math.round(minX), Math.round(maxX), Math.round(minY), Math.round(maxY));
-
-				final float dx = mFlingScroller.getFinalX() - mTranslationX;
-				final float dy = mFlingScroller.getFinalY() - mTranslationY;
-
-				if(Math.abs(dx) < 1 && Math.abs(dy) < 1) {
-					return false;
-				}
+				// Using FlingScroller here. The results were better than the Scroller class
+				// https://android.googlesource.com/platform/packages/apps/Gallery2/+/master/src/com/android/gallery3d/ui/FlingScroller.java
+				mFlingScroller.fling(Math.round(mTranslationX), Math.round(mTranslationY), Math.round(velocityX), Math.round(velocityY), Math.round(minTranslationX), Math.round(maxTranslationX), Math.round(minTranslationY), Math.round(maxTranslationY));
 
 				clearAnimation();
 				final Animation animation = new FlingAnimation();
@@ -153,10 +145,6 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScale(ScaleGestureDetector detector) {
-				return option3(detector);
-			}
-
-			private boolean option3(ScaleGestureDetector detector) {
 				loadMatrixValues();
 
 				float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
@@ -165,140 +153,24 @@ public class TouchImageView extends ImageView {
 				final float focusX = computeFocus(getMeasuredWidth(), currentDrawableWidth, mTranslationX, detector.getFocusX());
 				final float focusY = computeFocus(getMeasuredHeight(), currentDrawableHeight, mTranslationY, detector.getFocusY());
 
-				final float minTranslationX = getMeasuredWidth() > currentDrawableWidth ? 0 : getMeasuredWidth() - currentDrawableWidth;
-				final float maxTranslationX = getMeasuredWidth() > currentDrawableWidth ? getMeasuredWidth() - currentDrawableWidth: 0;
-
-				final float minTranslationY = getMeasuredHeight() > currentDrawableHeight ? 0 : getMeasuredHeight() - currentDrawableHeight;
-				final float maxTranslationY = getMeasuredHeight() > currentDrawableHeight ? getMeasuredHeight() - currentDrawableHeight: 0;
-
-				float dx = 0;
-				float dy = 0;
-
-				if(mLastFocusX != null) {
-					dx = focusX - mLastFocusX;
-					if(mTranslationX < minTranslationX && dx > 0) {
-						if(mTranslationX + dx > maxTranslationX) {
-							dx = maxTranslationX - mTranslationX;
-						}
-					} else if(mTranslationX > maxTranslationX && dx < 0) {
-						if(mTranslationX + dx < minTranslationX) {
-							dx = minTranslationX - mTranslationX;
-						}
-					} else if(mTranslationX > minTranslationX && mTranslationX < maxTranslationX) {
-						if(mTranslationX + dx < minTranslationX) {
-							dx = minTranslationX - mTranslationX;
-						} else if(mTranslationX + dx > maxTranslationX) {
-							dx = maxTranslationX - mTranslationX;
-						}
-					} else {
-						dx = 0;
+				// Here, we provide the ability to scroll while scaling
+				if(mLastFocusX != null && mLastFocusY != null) {
+					final float dx = computeScaleTranslation(getMeasuredWidth(), currentDrawableWidth, mTranslationX, focusX - mLastFocusX);
+					final float dy = computeScaleTranslation(getMeasuredHeight(), currentDrawableHeight, mTranslationY, focusY - mLastFocusY);
+					
+					if(dx != 0 || dy != 0) {
+						mMatrix.postTranslate(dx, dy);
 					}
 				}
 
-
-				if(mLastFocusY != null) {
-					dy = focusY - mLastFocusY;
-					if(mTranslationY < minTranslationY && dy > 0) {
-						if(mTranslationY + dy > maxTranslationY) {
-							dy = maxTranslationY - mTranslationY;
-						}
-					} else if(mTranslationY > maxTranslationY && dy < 0) {
-						if(mTranslationY + dy < minTranslationY) {
-							dy = minTranslationY - mTranslationY;
-						}
-					} else if(mTranslationY > minTranslationY && mTranslationY < maxTranslationY) {
-						if(mTranslationY + dy < minTranslationY) {
-							dy = minTranslationY - mTranslationY;
-						} else if(mTranslationY + dy > maxTranslationY) {
-							dy = maxTranslationY - mTranslationY;
-						}
-					} else {
-						dy = 0;
-					}
-				}
-
-				if(dx != 0 || dy != 0) {
-					mMatrix.postTranslate(dx, dy);
-				}
-
-
 				final float scale = computeScale(getMinScale(), mScale, detector.getScaleFactor());
 				mMatrix.postScale(scale, scale, focusX, focusY);
 
-				clearAnimation();
-				ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
-
 				mLastFocusX = focusX;
 				mLastFocusY = focusY;
-
-				return true;
-			}
-
-			private boolean option2(ScaleGestureDetector detector) {
-				loadMatrixValues();
-
-				float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
-				float currentDrawableHeight = mDrawableIntrinsicHeight * mScale;
-
-				final float focusX = computeFocus(getMeasuredWidth(), currentDrawableWidth, mTranslationX, detector.getFocusX());
-				final float focusY = computeFocus(getMeasuredHeight(), currentDrawableHeight, mTranslationY, detector.getFocusY());
-
-				final boolean correctX = mTranslationX <= 0 && mTranslationX + currentDrawableWidth >= getMeasuredWidth();
-				final boolean correctY = mTranslationY <= 0 && mTranslationY + currentDrawableHeight >= getMeasuredHeight();
-
-				if(mLastFocusX != null && mLastFocusY != null) {
-					final float dx = focusX - mLastFocusX;
-					final float dy = focusY - mLastFocusY;
-					mMatrix.postTranslate(dx, dy);
-				}
-
-				final float scale = computeScale(getMinScale(), mScale, detector.getScaleFactor());
-				mMatrix.postScale(scale, scale, focusX, focusY);
-
-				loadMatrixValues();
-
-				currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
-				currentDrawableHeight = mDrawableIntrinsicHeight * mScale;
-
-				final float dx = correctX ? computeTranslation(getMeasuredWidth(), currentDrawableWidth, mTranslationX, 0) : 0;
-				final float dy = correctY ? computeTranslation(getMeasuredHeight(), currentDrawableHeight, mTranslationY, 0) : 0;
-
-				if(dx != 0 || dy != 0) {
-					mMatrix.postTranslate(dx, dy);
-				}
-
+				
 				clearAnimation();
 				ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
-
-				mLastFocusX = focusX;
-				mLastFocusY = focusY;
-
-				return true;
-			}
-
-			private boolean option1(ScaleGestureDetector detector) {
-				loadMatrixValues();
-
-				final float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
-				final float currentDrawableHeight = mDrawableIntrinsicHeight * mScale;
-
-				final float focusX = computeFocus(getMeasuredWidth(), currentDrawableWidth, mTranslationX, detector.getFocusX());
-				final float focusY = computeFocus(getMeasuredHeight(), currentDrawableHeight, mTranslationY, detector.getFocusY());
-
-				if(mLastFocusX != null && mLastFocusY != null) {
-					final float dx = focusX - mLastFocusX;
-					final float dy = focusY - mLastFocusY;
-					mMatrix.postTranslate(dx, dy);
-				}
-
-				final float scale = computeScale(getMinScale(), mScale, detector.getScaleFactor());
-				mMatrix.postScale(scale, scale, focusX, focusY);
-
-				clearAnimation();
-				ViewCompat.postInvalidateOnAnimation(TouchImageView.this);
-
-				mLastFocusX = focusX;
-				mLastFocusY = focusY;
 
 				return true;
 			}
@@ -447,6 +319,35 @@ public class TouchImageView extends ImageView {
 		}
 
 		return delta;
+	}
+	
+	private static float computeScaleTranslation(float viewSize, float drawableSize, float currentTranslation, float delta) {
+		final float minTranslation = viewSize > drawableSize ? 0 : viewSize - drawableSize;
+		final float maxTranslation = viewSize > drawableSize ? viewSize - drawableSize : 0;
+
+		if(currentTranslation < minTranslation && delta > 0) {
+			if(currentTranslation + delta > maxTranslation) {
+				return maxTranslation - currentTranslation;
+			} else {
+				return delta;
+			}
+		} else if(currentTranslation > maxTranslation && delta < 0) {
+			if(currentTranslation + delta < minTranslation) {
+				return minTranslation - currentTranslation;
+			}
+			else {
+				return delta;
+			}
+		} else if(currentTranslation > minTranslation && currentTranslation < maxTranslation) {
+			if(currentTranslation + delta < minTranslation) {
+				return minTranslation - currentTranslation;
+			} else if(currentTranslation + delta > maxTranslation) {
+				return maxTranslation - currentTranslation;
+			} else {
+				return delta;
+			}
+		}
+		return 0;
 	}
 
 	// If our focal point is outside the image, we will project it to our image bounds

@@ -40,18 +40,18 @@ public class TileBitmapDrawable extends Drawable {
 	private static final int TILE_SIZE_DENSITY_HIGH = 256;
 	private static final int TILE_SIZE_DEFAULT = 128;
 
-	// We use a shared cache between instances to minimize OutOfMemoryError
+	// A shared cache is used between instances to minimize OutOfMemoryError
 	private static BitmapLruCache sBitmapCache;
 	private static final Object sBitmapCacheLock = new Object();
 
-	// We keep the removed entries of BitmapLruCache in a Bitmap pool in order to reuse them and minimize Object allocations
+	// The removed entries of BitmapLruCache is kept in a Bitmap pool in order to reuse them and minimize Object allocations
 	private static final HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>> sReusableBitmapPool = new HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>>();
 
 	// Instance ids are used to identify a cache hit for a specific instance of TileBitmapDrawable on the shared BitmapLruCache
 	private static final AtomicInteger sInstanceIds = new AtomicInteger(1);
 	private final int mInstanceId = sInstanceIds.getAndIncrement();
 
-	// We need the reference of the parent ImageView in order to get the Matrix values and determine the visible area
+	// The reference of the parent ImageView is needed in order to get the Matrix values and determine the visible area
 	private final WeakReference<ImageView> mParentView;
 
 	private final BitmapRegionDecoder mRegionDecoder;
@@ -105,7 +105,7 @@ public class TileBitmapDrawable extends Drawable {
 		final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize) + 1;
 		final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize) + 1;
 
-		// We want the cache to hold the minimum required size to display all visible tiles
+		// The shared cache will have the minimum required size to display all visible tiles
 		// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
 		final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
 
@@ -173,7 +173,7 @@ public class TileBitmapDrawable extends Drawable {
 		final float translationY = mMatrixValues[Matrix.MTRANS_Y];
 		final float scale = mMatrixValues[Matrix.MSCALE_X];
 
-		// If the matrix values have changed, we need to clear the decode queue in order to avoid decoding unused tiles
+		// If the matrix values have changed, the decode queue must be cleared in order to avoid decoding unused tiles
 		if(translationX != mLastMatrixValues[Matrix.MTRANS_X] || translationY != mLastMatrixValues[Matrix.MTRANS_Y] || scale != mLastMatrixValues[Matrix.MSCALE_X]) {
 			mDecodeQueue.clear();
 		}
@@ -237,7 +237,7 @@ public class TileBitmapDrawable extends Drawable {
 							}
 						}
 
-						// We use the screenNail while we decode the proper tile
+						// The screenNail is used while the proper tile is being decoded
 						final int screenNailLeft = Math.round(tileLeft * mScreenNail.getWidth() / (float) mIntrinsicWidth);
 						final int screenNailTop = Math.round(tileTop * mScreenNail.getHeight() / (float) mIntrinsicHeight);
 						final int screenNailRight = Math.round(tileRight * mScreenNail.getWidth() / (float) mIntrinsicWidth);
@@ -373,21 +373,25 @@ public class TileBitmapDrawable extends Drawable {
 			super(maxSize);
 		}
 
-		@TargetApi(Build.VERSION_CODES.KITKAT)
 		@Override
 		protected int sizeOf(String key, Bitmap value) {
-			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-				return value.getAllocationByteCount();
-			}
-			else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR1) {
-				return value.getByteCount();
-			}
-			return value.getRowBytes() * value.getHeight();
+			return getBitmapSize(value);
 		}
 
 		@Override
 		protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
 			addReusableBitmap(oldValue);
+		}
+		
+		@TargetApi(Build.VERSION_CODES.KITKAT)
+		private static int getBitmapSize(Bitmap bitmap) {
+			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+				return bitmap.getAllocationByteCount();
+			}
+			else if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR1) {
+				return bitmap.getByteCount();
+			}
+			return bitmap.getRowBytes() * bitmap.getHeight();
 		}
 	}
 
@@ -470,7 +474,6 @@ public class TileBitmapDrawable extends Drawable {
 			mDecodeQueue = decodeQueue;
 		}
 
-		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 		@Override
 		public void run() {
 			while(true) {
@@ -498,13 +501,7 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferredConfig = Config.ARGB_8888;
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
-				
-				if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-					final int bitmapWidth = Math.round(tile.mTileRect.width() / (float) options.inSampleSize);
-					final int bitmapHeight = Math.round(tile.mTileRect.height() / (float) options.inSampleSize);
-					
-					options.inBitmap = getReusableBitmap(bitmapWidth, bitmapHeight);
-				}
+				addInBitmapOptions(options, tile);
 				
 				Bitmap bitmap;
 				synchronized(mDecoder) {
@@ -514,17 +511,22 @@ public class TileBitmapDrawable extends Drawable {
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
-				
-				if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB && options.inBitmap != null && options.inBitmap != bitmap) {
-					addReusableBitmap(options.inBitmap);
-					options.inBitmap = null;
-				}
 			}
 		}
 		
 		public void quit() {
 			mQuit = true;
 			interrupt();
+		}
+		
+		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+		private static void addInBitmapOptions(BitmapFactory.Options options, Tile tile) {
+			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+				final int bitmapWidth = Math.round(tile.mTileRect.width() / (float) options.inSampleSize);
+				final int bitmapHeight = Math.round(tile.mTileRect.height() / (float) options.inSampleSize);
+				
+				options.inBitmap = getReusableBitmap(bitmapWidth, bitmapHeight);
+			}
 		}
 	}
 }
