@@ -65,12 +65,13 @@ public class TileBitmapDrawable extends Drawable {
 	private final Bitmap mScreenNail;
 	private final Paint mPaint = new Paint();
 
+	private Matrix mMatrix;
 	private final float[] mMatrixValues = new float[9];
 	private float[] mLastMatrixValues = new float[9];
 
 	private final Rect mTileRect = new Rect();
 	private final Rect mVisibleAreaRect = new Rect();
-	private final Rect mDestRect = new Rect();
+	private final Rect mScreenNailRect = new Rect();
 
 	public static void attachTileBitmapDrawable(ImageView imageView, String path, Drawable placeHolder, OnInitializeListener listener) {
 		new InitializationTask(imageView, placeHolder, listener).execute(path);
@@ -166,9 +167,9 @@ public class TileBitmapDrawable extends Drawable {
 
 		final int parentViewWidth = parentView.getWidth();
 		final int parentViewHeight = parentView.getHeight();
-		final Matrix imageMatrix = parentView.getImageMatrix();
+		mMatrix = parentView.getImageMatrix();
 
-		imageMatrix.getValues(mMatrixValues);
+		mMatrix.getValues(mMatrixValues);
 		final float translationX = mMatrixValues[Matrix.MTRANS_X];
 		final float translationY = mMatrixValues[Matrix.MTRANS_Y];
 		final float scale = mMatrixValues[Matrix.MSCALE_X];
@@ -213,12 +214,6 @@ public class TileBitmapDrawable extends Drawable {
 
 				if(Rect.intersects(mVisibleAreaRect, mTileRect)) {
 
-					final int destRectLeft = (int) (tileLeft * scale + translationX);
-					final int destRectTop = (int) (tileTop * scale + translationY);
-					final int destRectRight = (int) (tileRight * scale + translationX);
-					final int destRectBottom = (int) (tileBottom * scale + translationY);
-					mDestRect.set(destRectLeft, destRectTop, destRectRight, destRectBottom);
-
 					final Tile tile = new Tile(mInstanceId, mTileRect, i, j, currentLevel);
 
 					Bitmap cached = null;
@@ -227,7 +222,7 @@ public class TileBitmapDrawable extends Drawable {
 					}
 
 					if(cached != null) {
-						canvas.drawBitmap(cached, null, mDestRect, mPaint);
+						canvas.drawBitmap(cached, null, mTileRect, mPaint);
 					} else {
 						cacheMiss = true;
 
@@ -242,9 +237,9 @@ public class TileBitmapDrawable extends Drawable {
 						final int screenNailTop = Math.round(tileTop * mScreenNail.getHeight() / (float) mIntrinsicHeight);
 						final int screenNailRight = Math.round(tileRight * mScreenNail.getWidth() / (float) mIntrinsicWidth);
 						final int screenNailBottom = Math.round(tileBottom * mScreenNail.getHeight() / (float) mIntrinsicHeight);
-						mTileRect.set(screenNailLeft, screenNailTop, screenNailRight, screenNailBottom);
+						mScreenNailRect.set(screenNailLeft, screenNailTop, screenNailRight, screenNailBottom);
 
-						canvas.drawBitmap(mScreenNail, mTileRect, mDestRect, mPaint);
+						canvas.drawBitmap(mScreenNail, mScreenNailRect, mTileRect, mPaint);
 					}
 				}
 			}
@@ -283,10 +278,10 @@ public class TileBitmapDrawable extends Drawable {
 	private static String getReusableBitmapPoolKey(int width, int height) {
 		return "#" + width + "#" + height;
 	}
-	
+
 	private static void addReusableBitmap(Bitmap bitmap) {
 		final String reusableBitmapPoolKey = getReusableBitmapPoolKey(bitmap.getWidth(), bitmap.getHeight());
-		
+
 		synchronized(sReusableBitmapPool) {
 			LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableBitmapPoolKey);
 			if(queue == null) {
@@ -296,10 +291,10 @@ public class TileBitmapDrawable extends Drawable {
 			queue.add(new SoftReference<Bitmap>(bitmap));
 		}
 	}
-	
+
 	private static Bitmap getReusableBitmap(int bitmapWidth, int bitmapHeight) {
 		final String reusableBitmapPoolKey = getReusableBitmapPoolKey(bitmapWidth, bitmapHeight);
-		
+
 		Bitmap bitmap = null;
 
 		synchronized(sReusableBitmapPool) {
@@ -319,7 +314,7 @@ public class TileBitmapDrawable extends Drawable {
 		if(bitmap == null) {
 			bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Config.ARGB_8888);
 		}
-		
+
 		return bitmap;
 	}
 
@@ -382,7 +377,7 @@ public class TileBitmapDrawable extends Drawable {
 		protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
 			addReusableBitmap(oldValue);
 		}
-		
+
 		@TargetApi(Build.VERSION_CODES.KITKAT)
 		private static int getBitmapSize(Bitmap bitmap) {
 			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
@@ -502,7 +497,7 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
 				addInBitmapOptions(options, tile);
-				
+
 				Bitmap bitmap;
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
@@ -513,18 +508,18 @@ public class TileBitmapDrawable extends Drawable {
 				}
 			}
 		}
-		
+
 		public void quit() {
 			mQuit = true;
 			interrupt();
 		}
-		
+
 		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 		private static void addInBitmapOptions(BitmapFactory.Options options, Tile tile) {
 			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
 				final int bitmapWidth = Math.round(tile.mTileRect.width() / (float) options.inSampleSize);
 				final int bitmapHeight = Math.round(tile.mTileRect.height() / (float) options.inSampleSize);
-				
+
 				options.inBitmap = getReusableBitmap(bitmapWidth, bitmapHeight);
 			}
 		}

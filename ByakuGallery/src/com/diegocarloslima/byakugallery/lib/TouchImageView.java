@@ -1,6 +1,7 @@
 package com.diegocarloslima.byakugallery.lib;
 
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.drawable.Drawable;
 import android.support.v4.view.ViewCompat;
@@ -217,9 +218,23 @@ public class TouchImageView extends ImageView {
 			resetToInitialState();
 		}
 	}
+	
+	@Override
+	protected void onDraw(Canvas canvas) {
+		super.setImageMatrix(mMatrix);
+		super.onDraw(canvas);
+	}
 
 	@Override
 	public void setImageMatrix(Matrix matrix) {
+		if(matrix == null) {
+			matrix = new Matrix();
+		}
+		
+		if(!mMatrix.equals(matrix)) {
+			mMatrix.set(matrix);
+			invalidate();
+		}
 	}
 
 	@Override
@@ -261,6 +276,7 @@ public class TouchImageView extends ImageView {
 		if(scaleType != ScaleType.MATRIX) {
 			throw new IllegalArgumentException("Unsupported scaleType. Only ScaleType.MATRIX is allowed.");
 		}
+		super.setScaleType(scaleType);
 	}
 
 	@Override
@@ -287,7 +303,7 @@ public class TouchImageView extends ImageView {
 		final float freeSpaceHorizontal = (getMeasuredWidth() - (mDrawableIntrinsicWidth * minScale)) / 2F;
 		final float freeSpaceVertical = (getMeasuredHeight() - (mDrawableIntrinsicHeight * minScale)) / 2F;
 		mMatrix.postTranslate(freeSpaceHorizontal, freeSpaceVertical);
-
+		
 		invalidate();
 	}
 
