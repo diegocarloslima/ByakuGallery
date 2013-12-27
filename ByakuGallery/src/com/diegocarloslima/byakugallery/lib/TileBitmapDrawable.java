@@ -2,10 +2,8 @@ package com.diegocarloslima.byakugallery.lib;
 
 import java.io.FileDescriptor;
 import java.io.InputStream;
-import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,9 +41,6 @@ public class TileBitmapDrawable extends Drawable {
 	// A shared cache is used between instances to minimize OutOfMemoryError
 	private static BitmapLruCache sBitmapCache;
 	private static final Object sBitmapCacheLock = new Object();
-
-	// The removed entries of BitmapLruCache is kept in a Bitmap pool in order to reuse them and minimize Object allocations
-	private static final HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>> sReusableBitmapPool = new HashMap<String, LinkedBlockingQueue<SoftReference<Bitmap>>>();
 
 	// Instance ids are used to identify a cache hit for a specific instance of TileBitmapDrawable on the shared BitmapLruCache
 	private static final AtomicInteger sInstanceIds = new AtomicInteger(1);
@@ -202,7 +197,7 @@ public class TileBitmapDrawable extends Drawable {
 		mVisibleAreaRect.set(visibleAreaLeft, visibleAreaTop, visibleAreaRight, visibleAreaBottom);
 
 		boolean cacheMiss = false;
-
+		
 		for(int i = 0; i < horizontalTiles; i++) {
 			for(int j = 0; j < verticalTiles; j++) {
 
@@ -275,49 +270,6 @@ public class TileBitmapDrawable extends Drawable {
 		}
 	}
 
-	private static String getReusableBitmapPoolKey(int width, int height) {
-		return "#" + width + "#" + height;
-	}
-
-	private static void addReusableBitmap(Bitmap bitmap) {
-		final String reusableBitmapPoolKey = getReusableBitmapPoolKey(bitmap.getWidth(), bitmap.getHeight());
-
-		synchronized(sReusableBitmapPool) {
-			LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableBitmapPoolKey);
-			if(queue == null) {
-				queue = new LinkedBlockingQueue<SoftReference<Bitmap>>();
-				sReusableBitmapPool.put(reusableBitmapPoolKey, queue);
-			}
-			queue.add(new SoftReference<Bitmap>(bitmap));
-		}
-	}
-
-	private static Bitmap getReusableBitmap(int bitmapWidth, int bitmapHeight) {
-		final String reusableBitmapPoolKey = getReusableBitmapPoolKey(bitmapWidth, bitmapHeight);
-
-		Bitmap bitmap = null;
-
-		synchronized(sReusableBitmapPool) {
-			final LinkedBlockingQueue<SoftReference<Bitmap>> queue = sReusableBitmapPool.get(reusableBitmapPoolKey);
-			if(queue != null) {
-				SoftReference<Bitmap> ref = queue.poll();
-				while(ref != null) {
-					bitmap = ref.get();
-					if(bitmap != null) {
-						break;
-					}
-					ref = queue.poll();
-				}
-			}
-		}
-
-		if(bitmap == null) {
-			bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Config.ARGB_8888);
-		}
-
-		return bitmap;
-	}
-
 	public interface OnInitializeListener {
 		public void onStartInitialization();
 
@@ -371,11 +323,6 @@ public class TileBitmapDrawable extends Drawable {
 		@Override
 		protected int sizeOf(String key, Bitmap value) {
 			return getBitmapSize(value);
-		}
-
-		@Override
-		protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
-			addReusableBitmap(oldValue);
 		}
 
 		@TargetApi(Build.VERSION_CODES.KITKAT)
@@ -496,13 +443,12 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferredConfig = Config.ARGB_8888;
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
-				addInBitmapOptions(options, tile);
 
 				Bitmap bitmap;
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
 				}
-
+				
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
@@ -512,16 +458,6 @@ public class TileBitmapDrawable extends Drawable {
 		public void quit() {
 			mQuit = true;
 			interrupt();
-		}
-
-		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-		private static void addInBitmapOptions(BitmapFactory.Options options, Tile tile) {
-			if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-				final int bitmapWidth = Math.round(tile.mTileRect.width() / (float) options.inSampleSize);
-				final int bitmapHeight = Math.round(tile.mTileRect.height() / (float) options.inSampleSize);
-
-				options.inBitmap = getReusableBitmap(bitmapWidth, bitmapHeight);
-			}
 		}
 	}
 }
