@@ -1,5 +1,42 @@
 # ByakuGallery
+ByakuGallery is an open source Android library that allows the visualization of large images with gesture capabilities. This lib is based on AOSP [Camera2](https://android.googlesource.com/platform/packages/apps/Camera2/).
 
+![Sample Screenshot](https://github.com/diegocarloslima/ByakuGallery/raw/master/sample.png)&nbsp;![Sample Animation](https://github.com/diegocarloslima/ByakuGallery/raw/master/sample_animation.gif)
+
+The name was inspired by the [Byakugan](http://naruto.wikia.com/wiki/Byakugan) from Naruto series :)
+
+## Features
+- The image is split in small tiles and only the visible portion is allocated on memory, avoiding `OutOfmemoryError`.
+- Full gesture capabilities: Click, LongClick, DoubleTap, Pan, Fling and Pinch Zoom.
+- Smooth animations.
+- Can easily be placed inside a parent View with scrolling (e.g. `GalleryViewPager`).
+
+## Sample Application
+Download the sample app on Google Play. (Soon)
+
+The sample app project code is also included on this repository.
+
+## Usage
+The ByakuGallery was designed to be the simplest possible to use. Also, the two main classes `TileBitmapDrawable` and `TouchImageView` were designed to be independent. That means you can use them separately if you want to :)
+
+Here are the few steps needed to setup:
+
+1. Add the `TouchImageView` to your xml file:
+
+    ```xml
+    <com.diegocarloslima.byakugallery.lib.TouchImageView
+    android:id="@+id/my_image"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+    ```
+2. Them add these lines to your java code (usually on your `Activity.onCreate()` or `Fragment.onCreateView()` method):
+
+    ```java
+    TouchImageView myImage = (TouchImageView) findViewById(R.id.my_image);
+    InputStream is = getResources.openRawResource(R.raw.image);
+    TileBitmapDrawable.attachTileBitmapDrawable(myImage, is, null, null);
+    ```
+3. And that's all! For a complete implementation, you can take a look at the sample project.
 
 ## Used by
 
