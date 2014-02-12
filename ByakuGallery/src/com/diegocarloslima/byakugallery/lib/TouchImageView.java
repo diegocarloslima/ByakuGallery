@@ -28,6 +28,7 @@ public class TouchImageView extends ImageView {
 	private final float[] mMatrixValues = new float[9];
 
 	private float mScale;
+	private float mMaxScale = 1;
 	private float mTranslationX;
 	private float mTranslationY;
 
@@ -66,7 +67,7 @@ public class TouchImageView extends ImageView {
 
 				final float minScale = getMinScale();
 				// If we have already zoomed in, we should return to our initial scale value (minScale). Otherwise, scale to full size
-				final float targetScale = mScale > minScale ? minScale : 1;
+				final float targetScale = mScale > minScale ? minScale : mMaxScale;
 
 				// First, we try to keep the focused point in the same position when the animation ends
 				final float desiredTranslationX = e.getX() - (e.getX() - mTranslationX) * (targetScale / mScale);
@@ -164,7 +165,7 @@ public class TouchImageView extends ImageView {
 					}
 				}
 
-				final float scale = computeScale(getMinScale(), mScale, detector.getScaleFactor());
+				final float scale = computeScale(getMinScale(), mMaxScale, mScale, detector.getScaleFactor());
 				mMatrix.postScale(scale, scale, focusX, focusY);
 
 				mLastFocusX = focusX;
@@ -291,6 +292,10 @@ public class TouchImageView extends ImageView {
 		}
 		return false;
 	}
+	
+	public void setMaxScale(float maxScale) {
+		mMaxScale = maxScale;
+	}
 
 	private void resetToInitialState() {
 		mMatrix.reset();
@@ -316,8 +321,8 @@ public class TouchImageView extends ImageView {
 
 	private float getMinScale() {
 		float minScale = Math.min(getMeasuredWidth() / (float) mDrawableIntrinsicWidth, getMeasuredHeight() / (float) mDrawableIntrinsicHeight);
-		if(minScale > 1) {
-			minScale = 1;
+		if(minScale > mMaxScale) {
+			minScale = mMaxScale;
 		}
 		return minScale;
 	}
@@ -377,12 +382,12 @@ public class TouchImageView extends ImageView {
 		return focusCoordinate;
 	}
 
-	// The scale values must be in [minScale, 1]
-	private static float computeScale(float minScale, float currentScale, float delta) {
+	// The scale values must be in [minScale, maxScale]
+	private static float computeScale(float minScale, float maxScale, float currentScale, float delta) {
 		if(currentScale * delta < minScale) {
 			return minScale / currentScale;
-		} else if(currentScale * delta > 1) {
-			return 1 / currentScale;
+		} else if(currentScale * delta > maxScale) {
+			return maxScale / currentScale;
 		}
 
 		return delta;
