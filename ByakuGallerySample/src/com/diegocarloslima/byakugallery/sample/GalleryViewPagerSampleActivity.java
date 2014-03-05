@@ -30,7 +30,7 @@ public class GalleryViewPagerSampleActivity extends FragmentActivity {
 	
 	private final class GalleryAdapter extends FragmentStatePagerAdapter {
 		
-		private int[] images = {R.raw.photo1, R.raw.photo2, R.raw.photo3, R.raw.android1, R.raw.android2, R.raw.android3};
+		private int[] images = {R.raw.queen, R.raw.photo1, R.raw.photo2, R.raw.photo3, R.raw.android1, R.raw.android2, R.raw.android3};
 		
 		GalleryAdapter() {
 			super(getSupportFragmentManager());
