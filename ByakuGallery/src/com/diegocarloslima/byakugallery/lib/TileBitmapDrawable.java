@@ -58,7 +58,7 @@ public class TileBitmapDrawable extends Drawable {
 	private final int mTileSize;
 
 	private final Bitmap mScreenNail;
-	private final Paint mPaint = new Paint();
+	private final Paint mPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
 
 	private Matrix mMatrix;
 	private final float[] mMatrixValues = new float[9];
@@ -447,6 +447,10 @@ public class TileBitmapDrawable extends Drawable {
 				Bitmap bitmap;
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
+				}
+				
+				if(bitmap == null) {
+					continue;
 				}
 				
 				synchronized(sBitmapCacheLock) {
