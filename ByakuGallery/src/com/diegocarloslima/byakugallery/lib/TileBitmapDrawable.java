@@ -15,7 +15,6 @@ import android.graphics.Bitmap.Config;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapRegionDecoder;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Matrix;
 import android.graphics.Paint;
@@ -471,14 +470,7 @@ public class TileBitmapDrawable extends Drawable {
 						}
 					} while (isOutOfMemory);
 				}
-
-				if (bitmap == null) { // this case is black rectangle.
-					bitmap = Bitmap.createBitmap(tile.mTileRect.right - tile.mTileRect.left, tile.mTileRect.bottom
-							- tile.mTileRect.top, Config.ARGB_8888);
-					Canvas c = new Canvas(bitmap);
-					c.drawColor(Color.BLACK);
-				}
-
+				
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
