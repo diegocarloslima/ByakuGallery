@@ -388,16 +388,19 @@ public class TileBitmapDrawable extends Drawable {
 
 			boolean isOutOfMemory = false;
 			Bitmap screenNail = null;
-			do {
-				try {
-					screenNail = decoder.decodeRegion(screenNailRect, options);
-					screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
-					isOutOfMemory = false;
-				} catch (OutOfMemoryError e) {
-					options.inSampleSize *= 2;
-					isOutOfMemory = true;
-				}
-			} while (isOutOfMemory);
+			synchronized(decoder) {
+				do {
+					try {
+						screenNail = decoder.decodeRegion(screenNailRect, options);
+						screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale), 
+								Math.round(decoder.getHeight() * minScale), true);
+						isOutOfMemory = false;
+					} catch (OutOfMemoryError e) {
+						options.inSampleSize *= 2;
+						isOutOfMemory = true;
+					}
+				} while (isOutOfMemory);
+			}
 
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
 
