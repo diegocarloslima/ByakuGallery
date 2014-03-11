@@ -471,6 +471,10 @@ public class TileBitmapDrawable extends Drawable {
 					} while (isOutOfMemory);
 				}
 				
+				if (bitmap == null) {
+					return;
+				}
+				
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
