@@ -67,6 +67,10 @@ public class TileBitmapDrawable extends Drawable {
 	private final Rect mTileRect = new Rect();
 	private final Rect mVisibleAreaRect = new Rect();
 	private final Rect mScreenNailRect = new Rect();
+	
+	public static AsyncTask<Object, ?, TileBitmapDrawable> createTask(ImageView imageView, Drawable placeHolder, OnInitializeListener listener) {
+		return new InitializationTask(imageView, placeHolder, listener);
+	}
 
 	public static void attachTileBitmapDrawable(ImageView imageView, String path, Drawable placeHolder, OnInitializeListener listener) {
 		new InitializationTask(imageView, placeHolder, listener).execute(path);
@@ -403,6 +407,16 @@ public class TileBitmapDrawable extends Drawable {
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
 
 			return drawable;
+		}
+		
+		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+		@Override
+		protected void onCancelled(TileBitmapDrawable result) {
+			if (result != null && result.mDecoderWorker != null) {
+				result.mDecoderWorker.quit();
+			}
+			
+			super.onCancelled(result);
 		}
 
 		@Override
