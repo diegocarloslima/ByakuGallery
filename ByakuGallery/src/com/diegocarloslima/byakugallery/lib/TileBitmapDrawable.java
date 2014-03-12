@@ -385,20 +385,17 @@ public class TileBitmapDrawable extends Drawable {
 			options.inPreferQualityOverSpeed = true;
 			options.inSampleSize = (1 << (levelCount - 1));
 
-			boolean isOutOfMemory = false;
 			Bitmap screenNail = null;
-			synchronized(decoder) {
-				do {
-					try {
-						screenNail = decoder.decodeRegion(screenNailRect, options);
-						screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale), 
-								Math.round(decoder.getHeight() * minScale), true);
-						isOutOfMemory = false;
-					} catch (OutOfMemoryError e) {
-						options.inSampleSize *= 2;
-						isOutOfMemory = true;
-					}
-				} while (isOutOfMemory);
+			boolean decodeSuccess = false;
+			while (decodeSuccess == false) {
+				try {
+					screenNail = decoder.decodeRegion(screenNailRect, options);
+					screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale),
+					        Math.round(decoder.getHeight() * minScale), true);
+					decodeSuccess = true;
+				} catch (OutOfMemoryError e) {
+					options.inSampleSize *= 2;
+				}
 			}
 
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
@@ -457,18 +454,17 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
 
-				boolean isOutOfMemory = false;
 				Bitmap bitmap = null;
-				synchronized(mDecoder) {
-					do {
+				boolean decodeSuccess = false;
+				while (decodeSuccess == false) {
+					synchronized (mDecoder) {
 						try {
 							bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
-							isOutOfMemory = false;
+							decodeSuccess = true;
 						} catch (OutOfMemoryError e) {
 							options.inSampleSize *= 2;
-							isOutOfMemory = true;
 						}
-					} while (isOutOfMemory);
+					}
 				}
 				
 				if (bitmap == null) {
