@@ -390,8 +390,10 @@ public class TileBitmapDrawable extends Drawable {
 			while (decodeSuccess == false) {
 				try {
 					screenNail = decoder.decodeRegion(screenNailRect, options);
-					screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale),
-					        Math.round(decoder.getHeight() * minScale), true);
+					if (screenNail != null && screenNail.getWidth() > 0 && screenNail.getHeight() > 0) {
+						screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale),
+						        Math.round(decoder.getHeight() * minScale), true);
+					}
 					decodeSuccess = true;
 				} catch (OutOfMemoryError e) {
 					options.inSampleSize *= 2;
