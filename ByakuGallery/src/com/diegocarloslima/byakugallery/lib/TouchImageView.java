@@ -37,6 +37,7 @@ public class TouchImageView extends ImageView {
 
 	private final FlingScroller mFlingScroller = new FlingScroller();
 	private boolean mIsAnimatingBack;
+	private boolean mIsScaling;
 
 	public TouchImageView(Context context) {
 		this(context, null);
@@ -58,7 +59,9 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public void onLongPress(MotionEvent e) {
-				performLongClick();
+				if (mIsScaling == false) {
+					performLongClick();
+				}
 			}
 
 			@Override
@@ -148,6 +151,7 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScaleBegin(ScaleGestureDetector detector) {
+				mIsScaling = true;
 				mLastFocusX = null;
 				mLastFocusY = null;
 
@@ -191,6 +195,7 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public void onScaleEnd(ScaleGestureDetector detector) {
+				mIsScaling = false;
 				if (mDrawable == null) {
 					return;
 				}
