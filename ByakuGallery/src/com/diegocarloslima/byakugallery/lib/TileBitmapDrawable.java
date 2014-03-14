@@ -67,6 +67,10 @@ public class TileBitmapDrawable extends Drawable {
 	private final Rect mTileRect = new Rect();
 	private final Rect mVisibleAreaRect = new Rect();
 	private final Rect mScreenNailRect = new Rect();
+	
+	public static AsyncTask<Object, ?, TileBitmapDrawable> createTask(ImageView imageView, Drawable placeHolder, OnInitializeListener listener) {
+		return new InitializationTask(imageView, placeHolder, listener);
+	}
 
 	public static void attachTileBitmapDrawable(ImageView imageView, String path, Drawable placeHolder, OnInitializeListener listener) {
 		new InitializationTask(imageView, placeHolder, listener).execute(path);
@@ -385,12 +389,34 @@ public class TileBitmapDrawable extends Drawable {
 			options.inPreferQualityOverSpeed = true;
 			options.inSampleSize = (1 << (levelCount - 1));
 
-			Bitmap screenNail = decoder.decodeRegion(screenNailRect, options);
-			screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
+			Bitmap screenNail = null;
+			boolean decodeSuccess = false;
+			while (decodeSuccess == false) {
+				try {
+					screenNail = decoder.decodeRegion(screenNailRect, options);
+					if (screenNail != null && screenNail.getWidth() > 0 && screenNail.getHeight() > 0) {
+						screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale),
+						        Math.round(decoder.getHeight() * minScale), true);
+					}
+					decodeSuccess = true;
+				} catch (OutOfMemoryError e) {
+					options.inSampleSize *= 2;
+				}
+			}
 
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
 
 			return drawable;
+		}
+		
+		@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+		@Override
+		protected void onCancelled(TileBitmapDrawable result) {
+			if (result != null && result.mDecoderWorker != null) {
+				result.mDecoderWorker.quit();
+			}
+			
+			super.onCancelled(result);
 		}
 
 		@Override
@@ -444,9 +470,21 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
 
-				Bitmap bitmap;
-				synchronized(mDecoder) {
-					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
+				Bitmap bitmap = null;
+				boolean decodeSuccess = false;
+				while (decodeSuccess == false) {
+					synchronized (mDecoder) {
+						try {
+							bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
+							decodeSuccess = true;
+						} catch (OutOfMemoryError e) {
+							options.inSampleSize *= 2;
+						}
+					}
+				}
+				
+				if (bitmap == null) {
+					return;
 				}
 				
 				if(bitmap == null) {

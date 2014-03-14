@@ -37,6 +37,7 @@ public class TouchImageView extends ImageView {
 
 	private final FlingScroller mFlingScroller = new FlingScroller();
 	private boolean mIsAnimatingBack;
+	private boolean mIsScaling;
 
 	public TouchImageView(Context context) {
 		this(context, null);
@@ -58,11 +59,16 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public void onLongPress(MotionEvent e) {
-				performLongClick();
+				if (mIsScaling == false) {
+					performLongClick();
+				}
 			}
 
 			@Override
 			public boolean onDoubleTap(MotionEvent e) {
+				if (mDrawable == null) {
+					return false;
+				}
 				loadMatrixValues();
 
 				final float minScale = getMinScale();
@@ -87,6 +93,9 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+				if (mDrawable == null) {
+					return false;
+				}
 				// Sometimes, this method is called just after an onScaleEnd event. In this case, we want to wait until we animate back our image
 				if(mIsAnimatingBack) {
 					return false;
@@ -109,6 +118,9 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+				if (mDrawable == null) {
+					return false;
+				}
 				// Sometimes, this method is called just after an onScaleEnd event. In this case, we want to wait until we animate back our image
 				if(mIsAnimatingBack) {
 					return false;
@@ -139,6 +151,7 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScaleBegin(ScaleGestureDetector detector) {
+				mIsScaling = true;
 				mLastFocusX = null;
 				mLastFocusY = null;
 
@@ -147,6 +160,9 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public boolean onScale(ScaleGestureDetector detector) {
+				if (mDrawable == null) {
+					return false;
+				}
 				loadMatrixValues();
 
 				float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
@@ -179,6 +195,10 @@ public class TouchImageView extends ImageView {
 
 			@Override
 			public void onScaleEnd(ScaleGestureDetector detector) {
+				mIsScaling = false;
+				if (mDrawable == null) {
+					return;
+				}
 				loadMatrixValues();
 
 				final float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
