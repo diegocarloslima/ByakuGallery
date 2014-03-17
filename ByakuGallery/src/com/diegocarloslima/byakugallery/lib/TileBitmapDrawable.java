@@ -31,10 +31,6 @@ import android.widget.ImageView;
 
 public class TileBitmapDrawable extends Drawable {
 
-	// The hardware must support textures at least 2048x2048 pixels
-	// http://stackoverflow.com/questions/7428996/hw-accelerated-activity-how-to-get-opengl-texture-size-limit
-	private static final int BITMAP_TEXTURE_SIZE = 2048;
-
 	private static final int TILE_SIZE_DENSITY_HIGH = 256;
 	private static final int TILE_SIZE_DEFAULT = 128;
 
@@ -369,13 +365,12 @@ public class TileBitmapDrawable extends Drawable {
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
-
+			
 			final DisplayMetrics metrics = new DisplayMetrics();
 			final WindowManager wm = (WindowManager) mImageView.getContext().getSystemService(Context.WINDOW_SERVICE);
 			wm.getDefaultDisplay().getMetrics(metrics);
 
-			final int maxSize = Math.min(BITMAP_TEXTURE_SIZE, Math.max(metrics.widthPixels, metrics.heightPixels));
-			final float minScale = Math.min(maxSize / (float) decoder.getWidth(), maxSize / (float) decoder.getHeight());
+			final float minScale = Math.min(metrics.widthPixels / (float) decoder.getWidth(),  metrics.heightPixels / (float) decoder.getHeight());
 			final int levelCount = Math.max(1, MathUtils.ceilLog2(decoder.getWidth() / (decoder.getWidth() * minScale)));
 
 			final Rect screenNailRect = new Rect(0, 0, decoder.getWidth(), decoder.getHeight());
@@ -384,12 +379,15 @@ public class TileBitmapDrawable extends Drawable {
 			options.inPreferredConfig = Config.ARGB_8888;
 			options.inPreferQualityOverSpeed = true;
 			options.inSampleSize = (1 << (levelCount - 1));
-
-			Bitmap screenNail = decoder.decodeRegion(screenNailRect, options);
-			screenNail = Bitmap.createScaledBitmap(screenNail, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
-
+			
+			final Bitmap bitmap = decoder.decodeRegion(screenNailRect, options);
+			final Bitmap screenNail = Bitmap.createScaledBitmap(bitmap, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
+			if(!bitmap.equals(screenNail)) {
+				bitmap.recycle();
+			}
+			
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
-
+			
 			return drawable;
 		}
 
