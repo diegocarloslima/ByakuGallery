@@ -92,17 +92,16 @@ public class TileBitmapDrawable extends Drawable {
 
 		mScreenNail = screenNail;
 
-		// The Tile can be reduced up to half of its size until the next level of tiles is displayed
-		// It can also be displayed just a portion of the tile on each size, so we need to add 1
-		final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize) + 1;
-		final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize) + 1;
-
-		// The shared cache will have the minimum required size to display all visible tiles
-		// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
-		final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
-
 		synchronized(sBitmapCacheLock) {
 			if(sBitmapCache == null) {
+				// The Tile can be reduced up to half of its size until the next level of tiles is displayed
+				final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize);
+				final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize);
+				
+				// The shared cache will have the minimum required size to display all visible tiles
+				// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
+				final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
+				
 				sBitmapCache = new BitmapLruCache(cacheSize);
 			}
 		}
@@ -193,7 +192,7 @@ public class TileBitmapDrawable extends Drawable {
 		mVisibleAreaRect.set(visibleAreaLeft, visibleAreaTop, visibleAreaRight, visibleAreaBottom);
 
 		boolean cacheMiss = false;
-		
+
 		for(int i = 0; i < horizontalTiles; i++) {
 			for(int j = 0; j < verticalTiles; j++) {
 
@@ -365,7 +364,7 @@ public class TileBitmapDrawable extends Drawable {
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
-			
+
 			final DisplayMetrics metrics = new DisplayMetrics();
 			final WindowManager wm = (WindowManager) mImageView.getContext().getSystemService(Context.WINDOW_SERVICE);
 			wm.getDefaultDisplay().getMetrics(metrics);
@@ -379,15 +378,15 @@ public class TileBitmapDrawable extends Drawable {
 			options.inPreferredConfig = Config.ARGB_8888;
 			options.inPreferQualityOverSpeed = true;
 			options.inSampleSize = (1 << (levelCount - 1));
-			
+
 			final Bitmap bitmap = decoder.decodeRegion(screenNailRect, options);
 			final Bitmap screenNail = Bitmap.createScaledBitmap(bitmap, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
 			if(!bitmap.equals(screenNail)) {
 				bitmap.recycle();
 			}
-			
+
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
-			
+
 			return drawable;
 		}
 
@@ -446,11 +445,11 @@ public class TileBitmapDrawable extends Drawable {
 				synchronized(mDecoder) {
 					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
 				}
-				
+
 				if(bitmap == null) {
 					continue;
 				}
-				
+
 				synchronized(sBitmapCacheLock) {
 					sBitmapCache.put(tile.getKey(), bitmap);
 				}
