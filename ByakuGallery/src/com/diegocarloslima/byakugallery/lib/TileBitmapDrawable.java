@@ -97,11 +97,11 @@ public class TileBitmapDrawable extends Drawable {
 				// The Tile can be reduced up to half of its size until the next level of tiles is displayed
 				final int maxHorizontalTiles = (int) Math.ceil(2 * metrics.widthPixels / (float) mTileSize);
 				final int maxVerticalTiles = (int) Math.ceil(2 * metrics.heightPixels / (float) mTileSize);
-				
+
 				// The shared cache will have the minimum required size to display all visible tiles
 				// Here, we multiply by 4 because in ARGB_8888 config, each pixel is stored on 4 bytes
 				final int cacheSize = 4 * maxHorizontalTiles * maxVerticalTiles * mTileSize * mTileSize;
-				
+
 				sBitmapCache = new BitmapLruCache(cacheSize);
 			}
 		}
@@ -379,10 +379,18 @@ public class TileBitmapDrawable extends Drawable {
 			options.inPreferQualityOverSpeed = true;
 			options.inSampleSize = (1 << (levelCount - 1));
 
-			final Bitmap bitmap = decoder.decodeRegion(screenNailRect, options);
-			final Bitmap screenNail = Bitmap.createScaledBitmap(bitmap, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
-			if(!bitmap.equals(screenNail)) {
-				bitmap.recycle();
+			Bitmap screenNail = null;
+			try {
+				final Bitmap bitmap = decoder.decodeRegion(screenNailRect, options);
+				screenNail = Bitmap.createScaledBitmap(bitmap, Math.round(decoder.getWidth() * minScale), Math.round(decoder.getHeight() * minScale), true);
+				if(!bitmap.equals(screenNail)) {
+					bitmap.recycle();
+				}
+
+			} catch (OutOfMemoryError e) {
+				// We're under memory pressure. Let's try again with a smaller size
+				options.inSampleSize <<= 1;
+				screenNail = decoder.decodeRegion(screenNailRect, options);
 			}
 
 			TileBitmapDrawable drawable = new TileBitmapDrawable(mImageView, decoder, screenNail);
@@ -441,9 +449,13 @@ public class TileBitmapDrawable extends Drawable {
 				options.inPreferQualityOverSpeed = true;
 				options.inSampleSize =  (1 << tile.mLevel);
 
-				Bitmap bitmap;
+				Bitmap bitmap = null;
 				synchronized(mDecoder) {
-					bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
+					try {
+						bitmap = mDecoder.decodeRegion(tile.mTileRect, options);
+					} catch(OutOfMemoryError e) {
+						// Skip for now. The screenNail will be used instead
+					}
 				}
 
 				if(bitmap == null) {
