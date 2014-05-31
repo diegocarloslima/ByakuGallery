@@ -38,6 +38,15 @@ Here are the few steps needed to setup:
     ```
 3. And that's all! For a complete implementation, you can take a look at the sample project.
 
+## Gradle
+Add the following dependency to your `build.gradle` file:
+
+```groovy
+dependencies {
+    compile 'com.diegocarloslima:byakugallery:0.1.+@aar'
+}
+```
+
 ## Used by
 
 Let me know if you are using this lib in your app. I'll be glad to put your app name here :).
