@@ -1,13 +1,14 @@
 package com.diegocarloslima.byakugallery.sample;
 
-import java.io.InputStream;
-
 import android.app.Activity;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 
+import com.diegocarloslima.byakugallery.R;
 import com.diegocarloslima.byakugallery.lib.TileBitmapDrawable;
 import com.diegocarloslima.byakugallery.lib.TouchImageView;
+
+import java.io.InputStream;
 
 public class TouchImageViewSampleActivity extends Activity {
 

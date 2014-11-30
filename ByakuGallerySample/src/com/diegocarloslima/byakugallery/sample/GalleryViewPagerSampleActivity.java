@@ -1,11 +1,5 @@
 package com.diegocarloslima.byakugallery.sample;
 
-import java.io.InputStream;
-
-import com.diegocarloslima.byakugallery.lib.GalleryViewPager;
-import com.diegocarloslima.byakugallery.lib.TileBitmapDrawable;
-import com.diegocarloslima.byakugallery.lib.TouchImageView;
-
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
@@ -14,6 +8,13 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
+
+import com.diegocarloslima.byakugallery.R;
+import com.diegocarloslima.byakugallery.lib.GalleryViewPager;
+import com.diegocarloslima.byakugallery.lib.TileBitmapDrawable;
+import com.diegocarloslima.byakugallery.lib.TouchImageView;
+
+import java.io.InputStream;
 
 public class GalleryViewPagerSampleActivity extends FragmentActivity {
 	
