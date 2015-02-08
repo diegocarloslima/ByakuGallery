@@ -1,9 +1,11 @@
 package com.diegocarloslima.byakugallery.lib;
 
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
@@ -283,17 +285,17 @@ public class TouchImageView extends ImageView {
 	@Override
 	public boolean canScrollHorizontally(int direction) {
 		loadMatrixValues();
-
-		if(direction > 0) {
-			return Math.round(mTranslationX) < 0;
-		} else if(direction < 0) {
-			final float currentDrawableWidth = mDrawableIntrinsicWidth * mScale;
-			return Math.round(mTranslationX) > getMeasuredWidth() - Math.round(currentDrawableWidth);
-		}
-		return false;
+        return canScroll(getMeasuredWidth(), mDrawableIntrinsicWidth * mScale, mTranslationX, direction);
 	}
-	
-	public void setMaxScale(float maxScale) {
+
+    @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
+    @Override
+    public boolean canScrollVertically(int direction) {
+        loadMatrixValues();
+        return canScroll(getMeasuredHeight(), mDrawableIntrinsicHeight * mScale, mTranslationY, direction);
+    }
+
+    public void setMaxScale(float maxScale) {
 		mMaxScale = maxScale;
 	}
 
@@ -326,6 +328,15 @@ public class TouchImageView extends ImageView {
 		}
 		return minScale;
 	}
+
+    private static boolean canScroll(float viewSize, float drawableSize, float currentTranslation, int direction) {
+        if(direction > 0) {
+            return Math.round(currentTranslation) < 0;
+        } else if(direction < 0) {
+            return Math.round(currentTranslation) > viewSize - Math.round(drawableSize);
+        }
+        return false;
+    }
 
 	// The translation values must be in [0, viewSize - drawableSize], except if we have free space. In that case we will translate to half of the free space
 	private static float computeTranslation(float viewSize, float drawableSize, float currentTranslation, float delta) {
