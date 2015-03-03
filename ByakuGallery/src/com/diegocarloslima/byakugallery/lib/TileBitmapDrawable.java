@@ -419,6 +419,8 @@ public class TileBitmapDrawable extends Drawable {
                 // We're under memory pressure. Let's try again with a smaller size
                 options.inSampleSize <<= 1;
                 screenNail = decoder.decodeRegion(screenNailRect, options);
+            } catch (Exception e) {
+                return e;
             }
 
             try {
