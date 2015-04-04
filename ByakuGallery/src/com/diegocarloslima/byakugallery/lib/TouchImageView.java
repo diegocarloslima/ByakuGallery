@@ -209,6 +209,13 @@ public class TouchImageView extends ImageView {
 	}
 
 	@Override
+	protected void onDetachedFromWindow() {
+		super.onDetachedFromWindow();
+		mDrawable = null;
+		super.setImageDrawable(mDrawable);
+	}
+
+	@Override
 	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 		final int oldMeasuredWidth = getMeasuredWidth();
 		final int oldMeasuredHeight = getMeasuredHeight();
